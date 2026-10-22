@@ -1,5 +1,5 @@
 
-# FX Pulse — Foreign Exchange Data Platform
+# FX Pulse - Foreign Exchange Data Platform
 
 > Status: Work in progress
 > Java Backend + Data Engineering portfolio project
