@@ -1,5 +1,5 @@
 
-# FX Pulse — Foreign Exchange Data Platform
+# FX Pulse - Foreign Exchange Data Platform
 
 > Status: Work in progress
 > Java Backend + Data Engineering portfolio project
@@ -83,12 +83,10 @@ dbt, Kafka, Spark, Databricks, Kubernetes
 
 The project is developed incrementally.
 
-Phase 1: Java Backend
-Phase 2: Core Data Engineering
-Phase 3: Advanced Data Engineering
-Phase 4: Deployment and Portfolio
-
-See IMPLEMENTATION_PLAN.md for the full plan.
+- Phase 1: Java Backend
+- Phase 2: Core Data Engineering
+- Phase 3: Advanced Data Engineering
+- Phase 4: Deployment and Portfolio
 
 ## Getting Started
 
