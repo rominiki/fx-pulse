@@ -34,3 +34,25 @@
 - Define the FX rate data model
 - Create docs/data-contract.md
 - Draft the architecture diagram
+
+
+## 1-3
+
+### Completed
+- Designed the exchange-rate data model
+- Defined the composite primary key
+- Documented validation and duplicate rules
+- Created docs/data-contract.md
+- Created docs/architecture.md
+- Documented the PostgreSQL design decision
+
+### Learned
+- A composite primary key uses multiple columns.
+- Idempotency prevents duplicate ingestion.
+- NUMERIC is preferable to approximate floating-point
+  storage for exact decimal rate values.
+- Source observation dates must be preserved.
+
+### Next
+- Build the first Python/pandas analytics prototype.
+- Calculate daily returns and a rolling average.
