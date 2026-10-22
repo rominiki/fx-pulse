@@ -115,3 +115,31 @@ This will be addressed during ingestion design.
 - Run PostgreSQL through Docker Compose
 - Add versioned database migrations
 - Implement the first database-backed service
+
+
+## 2-1
+
+### Goal
+Create the initial Java 21 Spring Boot service.
+
+### Completed
+- Generated the Spring Boot Maven project
+- Added Spring Web, JPA, Validation,
+  PostgreSQL Driver, Flyway and Actuator
+- Created the initial package structure
+- Implemented GET /api/v1/ping
+- Verified HTTP 200 and {"status":"ok"}
+- Added a MockMvc controller test
+- Executed Maven tests successfully
+
+### Architecture Notes
+- The application is located in ingestion-service/.
+- The endpoint uses Spring MVC.
+- Database auto-configuration is temporarily disabled.
+- PostgreSQL will be configured later.
+
+### Next
+- Start PostgreSQL using Docker Compose.
+- Externalize database credentials.
+- Verify database connectivity.
+
