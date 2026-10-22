@@ -43,6 +43,18 @@ def main():
 
     df = df.sort_values("date").reset_index(drop=True)
 
+
+    start_date = pd.Timestamp(PARAMS["from"])
+    end_date = pd.Timestamp(PARAMS["to"])
+
+    df = df.loc[
+        df["date"].between(start_date, end_date)
+    ].reset_index(drop=True)
+
+    if df.empty:
+        raise ValueError("No observations in the requested date range")
+
+
     if df[["date", "base", "quote", "rate"]].isna().any().any():
         raise ValueError("Missing required data")
 
