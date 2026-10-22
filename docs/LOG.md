@@ -1,7 +1,7 @@
 
 # FX Pulse Development Log
 
-## Week 1 — Monday
+## Week 1 - Monday
 
 ### Completed
 - Prepared the project folder structure
