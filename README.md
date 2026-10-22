@@ -88,8 +88,6 @@ The project is developed incrementally.
 - Phase 3: Advanced Data Engineering
 - Phase 4: Deployment and Portfolio
 
-See IMPLEMENTATION_PLAN.md for the full plan.
-
 ## Getting Started
 
 Setup instructions and runnable commands will be
