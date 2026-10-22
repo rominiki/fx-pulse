@@ -168,3 +168,38 @@ Run PostgreSQL locally using Docker Compose.
 - Add Flyway V1 migration
 - Create the fx_rates table
 - Test schema initialization
+
+
+## 2-3
+
+### Goal
+Create and validate the first versioned PostgreSQL schema.
+
+### Completed
+- Created V1__create_fx_rates.sql
+- Created raw schema and raw.fx_rates table
+- Defined composite primary key
+- Added rate and currency-pair constraints
+- Added ingested_at timestamp
+- Configured Spring Boot datasource
+- Enabled automatic Flyway migrations
+- Verified flyway_schema_history
+- Verified migration is not rerun on restart
+- Tested migration on a disposable fresh database
+
+### Learned
+Flyway versions database schema changes.
+
+The database schema is created through migrations,
+not manually through application entity classes.
+
+The source observation date and ingestion timestamp
+represent different events.
+
+### Next
+- Create FxRateId composite key class
+- Create FxRate JPA entity
+- Implement Spring Data repository
+- Add DTO mapping
+- Test saving and retrieving exchange rates
+
