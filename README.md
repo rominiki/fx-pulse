@@ -40,6 +40,10 @@ analytical transformations, and data quality checks.
 Exchange-rate data is obtained through the public
 Frankfurter API.
 
+FX Pulse uses the Frankfurter API v2 with the European
+Central Bank (ECB) provider for historical and daily
+reference exchange rates.
+
 https://frankfurter.dev/
 
 The platform uses daily reference-rate data,

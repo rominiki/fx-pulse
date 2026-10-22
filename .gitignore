@@ -8,3 +8,22 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Java / Maven
+target/
+*.class
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# System files
+.DS_Store
+Thumbs.db
