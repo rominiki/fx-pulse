@@ -143,3 +143,28 @@ Create the initial Java 21 Spring Boot service.
 - Externalize database credentials.
 - Verify database connectivity.
 
+
+## 2-2
+
+### Goal
+
+Run PostgreSQL locally using Docker Compose.
+
+### Completed
+
+- Created PostgreSQL Docker Compose service
+- Added named volume for persistent storage
+- Externalized database credentials
+- Created .env.example
+- Verified .env is excluded from Git
+- Started the PostgreSQL container
+- Verified the container healthcheck
+- Executed SELECT version()
+- Documented start, stop and restart commands
+
+### Next
+
+- Create the raw database schema
+- Add Flyway V1 migration
+- Create the fx_rates table
+- Test schema initialization
