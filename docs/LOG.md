@@ -83,3 +83,35 @@
 - Add an architecture decision record.
 - Prepare the v0.1-design GitHub release.
 
+## 1-5
+
+### Completed
+
+- Created ADR 0001 explaining the ECB data-source decision
+- Updated README to distinguish completed and planned work
+- Documented commands to reproduce the Python prototype
+- Reviewed the data contract and architecture
+- Verified the analytics script
+- Prepared the v0.1-design release
+
+### One Lesson Learned
+
+A successful data pipeline is not just about downloading
+records. It also needs traceable sources, explicit data
+contracts, sensible validation and reproducible outputs.
+
+### One Unresolved Question
+
+How should FX Pulse handle a source correction when an
+observation already exists with the same provider, date
+and currency pair but a different rate?
+
+This will be addressed during ingestion design.
+
+### Next
+
+- Create the Java 21 Spring Boot application
+- Add the Maven Wrapper
+- Run PostgreSQL through Docker Compose
+- Add versioned database migrations
+- Implement the first database-backed service
