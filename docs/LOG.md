@@ -47,7 +47,6 @@
 - Documented the PostgreSQL design decision
 
 ### Learned
-- A composite primary key uses multiple columns.
 - Idempotency prevents duplicate ingestion.
 - NUMERIC is preferable to approximate floating-point
   storage for exact decimal rate values.
@@ -56,3 +55,31 @@
 ### Next
 - Build the first Python/pandas analytics prototype.
 - Calculate daily returns and a rolling average.
+
+
+## 1-4
+
+### Completed
+- Created a dedicated Python virtual environment
+- Installed requests and pandas
+- Created analytics/01_api_exploration.py
+- Downloaded historical ECB EUR/USD rates
+- Converted API JSON to a pandas DataFrame
+- Parsed and sorted observation dates
+- Calculated percentage returns
+- Calculated five-observation moving averages
+- Exported analytics results to CSV
+- Executed the script successfully twice
+
+### Learned
+- pct_change() calculates relative changes.
+- rolling(5).mean() calculates a five-row moving average.
+- Initial NaN values are expected and meaningful.
+- An observation-based window is not the same as
+  a calendar-day window.
+
+### Next
+- Review and finalize the Week 1 documentation.
+- Add an architecture decision record.
+- Prepare the v0.1-design GitHub release.
+
