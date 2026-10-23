@@ -145,8 +145,8 @@ The complete architecture is documented in [docs/architecture.md](docs/architect
 - [x] Spring Data JPA repository implementation
 - [x] DTO and entity mapper implementation
 - [x] Initial repository integration test implementation
-- [ ] Verify all repository integration tests pass
-- [ ] Finalize backend configuration and health checks
+- [x] Verify all repository integration tests pass
+- [x] Finalize backend configuration and health checks
 - [ ] Implement Frankfurter API Java client
 - [ ] Implement historical and daily exchange-rate ingestion
 - [ ] Add idempotent writes and conflict handling
@@ -347,7 +347,7 @@ python -m venv .venv
 The script:
 
 1. Requests historical ECB EUR/USD reference rates.
-2. Validates the response and sorts observations chronologically.
+2. Validates the response, filters observations to the requested date range, and sorts them chronologically.
 3. Calculates percentage changes between consecutive observations.
 4. Calculates five-observation moving averages.
 5. Exports analytical results to `analytics/eur_usd_jan_2025.csv`.
@@ -356,7 +356,16 @@ The first percentage return is missing because there is no preceding observation
 
 The first four moving averages are missing because five observations are required.
 
-**Date-range note:** During local testing, the API returned a December 31, 2024 observation alongside January 2025 observations. Verify the generated CSV dates. For strict January-only output, filter the observations by date before calculating returns and moving averages.
+**Date-range handling:** The Frankfurter API may return
+observations outside the requested date range. The Python
+prototype explicitly filters the retrieved data to the
+requested period before calculating percentage returns
+and moving averages. This ensures that the generated CSV
+contains only observations within the specified dates.
+
+For the January 2025 EUR/USD prototype, the exported
+CSV contains 22 observations from January 2 through
+January 31, 2025.
 
 Run the script a second time to confirm that it regenerates the CSV successfully rather than appending duplicate rows.
 

@@ -67,4 +67,12 @@ volumes and may permanently delete local data.
 The database server is running, but FX Pulse
 tables have not yet been created.
 
-Flyway migrations will be implemented later.
+## Current Status
+
+PostgreSQL runs locally through Docker Compose.
+
+Flyway V1 creates the raw schema and fx_rates table
+when the Spring Boot application starts.
+
+The database persistence foundation is implemented.
+Automated exchange-rate ingestion will be added later.

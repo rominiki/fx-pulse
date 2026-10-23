@@ -27,11 +27,12 @@ Table: raw.fx_rates
 
 | Column | PostgreSQL Type | Required | Description |
 |---|---|---|---|
-| provider | TEXT | Yes | Rate publisher, initially ECB |
+| provider | VARCHAR(16) | Yes | Rate publisher, initially ECB |
 | rate_date | DATE | Yes | Source observation date |
-| base_currency | CHAR(3) | Yes | Base currency, e.g. EUR |
-| quote_currency | CHAR(3) | Yes | Quote currency, e.g. USD |
-| rate | NUMERIC(20,10) | Yes | Exchange-rate value |
+| base_currency | CHAR(3) | Yes | Base currency |
+| quote_currency | CHAR(3) | Yes | Quote currency |
+| rate | NUMERIC(20,10) | Yes | Positive exchange rate |
+| ingested_at | TIMESTAMPTZ | Yes | Database-generated ingestion timestamp |
 
 ## 4. Mapping
 
@@ -104,7 +105,7 @@ to fill these dates.
 
 Example values are illustrative.
 
-## 10. Planned PostgreSQL Schema
+## 10. PostgreSQL Schema
 
 CREATE SCHEMA IF NOT EXISTS raw;
 
@@ -123,6 +124,14 @@ quote_currency
 )
 );
 
-This schema is a design draft.
-The actual database and migrations will be
-implemented later.
+## Implemented PostgreSQL Schema
+
+The initial schema is managed through Flyway.
+
+Migration:
+ingestion-service/src/main/resources/db/migration/V1__create_fx_rates.sql
+
+Flyway is responsible for schema creation and evolution.
+Hibernate validates the schema against the Java entity mappings.
+
+Future schema modifications must use new versioned migrations.
