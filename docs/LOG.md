@@ -203,3 +203,26 @@ represent different events.
 - Add DTO mapping
 - Test saving and retrieving exchange rates
 
+
+## 2-4
+
+### Goal
+Implement the JPA persistence layer for exchange rates.
+
+### Completed
+- Created FxRateId composite identifier
+- Created FxRate JPA entity
+- Mapped NUMERIC exchange rate to BigDecimal
+- Created FxRateRepository
+- Added historical date-range query
+- Created FxRateDto and FxRateMapper
+- Tested saving and reading a rate in PostgreSQL
+- Verified decimal precision and observation date
+
+
+### Next
+- Externalize database and API configuration
+- Verify Actuator health
+- Document the local startup process
+
+
