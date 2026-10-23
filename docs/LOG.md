@@ -226,3 +226,32 @@ Implement the JPA persistence layer for exchange rates.
 - Document the local startup process
 
 
+## 2-5
+
+### Goal
+
+Finalize the Spring Boot backend foundation with
+external configuration, operational health checks,
+automated tests and reproducible setup documentation.
+
+### Completed
+
+- Externalized PostgreSQL connection settings
+- Externalized Frankfurter API URL
+- Verified secret .env file is ignored by Git
+- Verified Docker PostgreSQL service is healthy
+- Verified existing Flyway V1 migration
+- Started Spring Boot successfully
+- Tested GET /api/v1/ping
+- Tested GET /actuator/health
+- Ran the Maven test suite
+- Created docs/setup.md
+- Updated README with local development instructions
+
+### Next Steps
+
+- Implement the Frankfurter API client
+- Fetch and parse exchange-rate observations
+- Validate incoming values
+- Save observations to PostgreSQL
+- Implement duplicate and conflict handling
