@@ -1,4 +1,3 @@
-
 # FX Pulse Development Log
 
 ## 1-1
