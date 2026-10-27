@@ -289,3 +289,32 @@ Implement and test the Frankfurter API v2 Java client.
 - Map FrankfurterRateResponse to FxRate
 - Implement idempotent PostgreSQL persistence
 - Add tests for duplicate and conflicting records
+
+## 3-2 - Validate and persist ECB rates
+
+### Goal
+Implement ingestion with transaction-safe PostgreSQL writes and idempotency.
+
+### Implemented
+- Added FxRateIngestionService (fetch, validate, filter dates, create FxRate)
+- Added FxRateInsertRepository using PostgreSQL ON CONFLICT DO NOTHING
+- Added FxRateWriteService with transaction boundary
+- Added duplicate skip and conflicting-value detection
+- Added IngestionResult summary and integration tests
+
+### Verification
+- [ ] Maven compilation succeeds
+- [ ] Same batch twice: 2 inserts, then 0 inserts / 2 skips
+- [ ] Changed incoming rate is rejected without overwriting stored value
+- [ ] Conflicting second record rolls back the first insert in the same batch
+- [ ] Invalid source value writes no rows
+- [ ] Out-of-range publication date is ignored
+
+### Notes
+- No Flyway schema change required: raw.fx_rates PK already exists.
+- Existing FxRateRepository/JPA mapping remains for read/query operations.
+- HTTP ingestion/backfill controller is the next step.
+- Retries and batching are not implemented yet.
+
+### Next
+Add POST ingestion and bounded backfill endpoints, with validation and observable counts.
