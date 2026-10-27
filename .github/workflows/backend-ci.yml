@@ -1,0 +1,59 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  java-tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ingestion-service
+
+    services:
+      postgres:
+        image: postgres:16
+
+        env:
+          POSTGRES_USER: fxpulse_ci
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: fxpulse_migration_test
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd "pg_isready -U fxpulse_ci -d fxpulse_migration_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/fxpulse_migration_test
+      DB_USER: fxpulse_ci
+      DB_PASSWORD: ci_only_password
+      FX_API_URL: https://api.frankfurter.dev/v2/providers/ecb/rates
+      SERVER_PORT: "8081"
+      TESTCONTAINERS_RYUK_DISABLED: "false"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: ingestion-service/pom.xml
+
+      - name: Make Maven Wrapper executable
+        run: chmod +x mvnw
+
+      - name: Verify backend
+        run: ./mvnw -B clean verify
