@@ -1,7 +1,6 @@
 # FX Pulse Development Log
 
-## 1-1
-
+## Repository setup
 ### Completed
 - Prepared the project folder structure
 - Reviewed README and repository configuration
@@ -14,8 +13,7 @@
 - Inspect ECB exchange-rate JSON responses
 - Save example exchange-rate data
 
-## 1-2
-
+## Frankfurter API exploration
 ### Completed
 - Explored Frankfurter API v2
 - Requested latest EUR/USD and EUR/GBP rates
@@ -35,8 +33,7 @@
 - Draft the architecture diagram
 
 
-## 1-3
-
+## Data-model design
 ### Completed
 - Designed the exchange-rate data model
 - Defined the composite primary key
@@ -56,8 +53,7 @@
 - Calculate daily returns and a rolling average.
 
 
-## 1-4
-
+## Python analytics prototype
 ### Completed
 - Created a dedicated Python virtual environment
 - Installed requests and pandas
@@ -78,12 +74,11 @@
   a calendar-day window.
 
 ### Next
-- Review and finalize the Week 1 documentation.
+- Review and finalize the first documentation.
 - Add an architecture decision record.
 - Prepare the v0.1-design GitHub release.
 
-## 1-5
-
+## Architecture documentation
 ### Completed
 
 - Created ADR 0001 explaining the ECB data-source decision
@@ -116,8 +111,7 @@ This will be addressed during ingestion design.
 - Implement the first database-backed service
 
 
-## 2-1
-
+## Spring Boot application scaffold
 ### Goal
 Create the initial Java 21 Spring Boot service.
 
@@ -143,8 +137,7 @@ Create the initial Java 21 Spring Boot service.
 - Verify database connectivity.
 
 
-## 2-2
-
+## Local PostgreSQL environment
 ### Goal
 
 Run PostgreSQL locally using Docker Compose.
@@ -169,8 +162,7 @@ Run PostgreSQL locally using Docker Compose.
 - Test schema initialization
 
 
-## 2-3
-
+## Flyway database migrations
 ### Goal
 Create and validate the first versioned PostgreSQL schema.
 
@@ -203,8 +195,7 @@ represent different events.
 - Test saving and retrieving exchange rates
 
 
-## 2-4
-
+## JPA entities and repository
 ### Goal
 Implement the JPA persistence layer for exchange rates.
 
@@ -225,8 +216,7 @@ Implement the JPA persistence layer for exchange rates.
 - Document the local startup process
 
 
-## 2-5
-
+## Configuration and health checks
 ### Goal
 
 Finalize the Spring Boot backend foundation with
@@ -255,66 +245,79 @@ automated tests and reproducible setup documentation.
 - Save observations to PostgreSQL
 - Implement duplicate and conflict handling
 
-## 3-1
-
+## Frankfurter HTTP client
 ### Goal
-
-Implement and test the Frankfurter API v2 Java client.
-
-### Completed
-
-- Created FrankfurterRateResponse record
-- Implemented FrankfurterClient using Spring RestClient
-- Configured the ECB-specific API endpoint
-- Added date and currency input validation
-- Implemented JSON array deserialization
-- Added MockRestServiceServer tests
-- Verified successful exchange-rate response parsing
-- Added controlled handling of HTTP 4xx and 5xx errors
-- Added handling for malformed and empty responses
-- Configured HTTP connection and read timeouts
-- Verified 8 client tests pass
-
-### Architecture Notes
-
-- The client only retrieves external API data.
-- Incoming DTOs are separate from JPA entities.
-- Data validation and persistence will be handled
-  by the ingestion service.
-- No database connection is required for client tests.
-
-### Next
-
-- Validate incoming exchange-rate observations
-- Map FrankfurterRateResponse to FxRate
-- Implement idempotent PostgreSQL persistence
-- Add tests for duplicate and conflicting records
-
-## 3-2 - Validate and persist ECB rates
-
-### Goal
-Implement ingestion with transaction-safe PostgreSQL writes and idempotency.
+Call ECB-specific Frankfurter API v2 and map flat JSON arrays to Java DTOs.
 
 ### Implemented
-- Added FxRateIngestionService (fetch, validate, filter dates, create FxRate)
-- Added FxRateInsertRepository using PostgreSQL ON CONFLICT DO NOTHING
-- Added FxRateWriteService with transaction boundary
-- Added duplicate skip and conflicting-value detection
-- Added IngestionResult summary and integration tests
+- `FrankfurterClient` using constructor-injected Spring `RestClient.Builder`.
+- `FrankfurterRateResponse` Java record (`date`, `base`, `quote`, `rate`).
+- `MockRestServiceServer` test with fixed successful JSON fixture.
+- Follow-up tests for empty JSON, malformed JSON and invalid arguments.
 
 ### Verification
-- [ ] Maven compilation succeeds
-- [ ] Same batch twice: 2 inserts, then 0 inserts / 2 skips
-- [ ] Changed incoming rate is rejected without overwriting stored value
-- [ ] Conflicting second record rolls back the first insert in the same batch
-- [ ] Invalid source value writes no rows
-- [ ] Out-of-range publication date is ignored
+- Tests for the pushed implementation were reported as passing locally. Repository CI and a live end-to-end backfill are separate verification gates.
 
-### Notes
-- No Flyway schema change required: raw.fx_rates PK already exists.
-- Existing FxRateRepository/JPA mapping remains for read/query operations.
-- HTTP ingestion/backfill controller is the next step.
-- Retries and batching are not implemented yet.
+### Design decisions
+- ECB reference data is not an executable trading quote.
+- Preserve source publication dates; don't manufacture holiday/weekend rows.
+
+## Transactional PostgreSQL ingestion
+### Goal
+Validate, map and persist ECB rates idempotently.
+
+### Implemented
+- `FxRateIngestionService`, `FxRateWriteService`, `FxRateInsertRepository`.
+- Composite-key `INSERT ... ON CONFLICT DO NOTHING`.
+- Identical existing value skipped; changed existing value raises `FxRateConflictException`.
+- Per-call transactional rollback on conflicting batch.
+
+### Verification
+- Tests for the pushed implementation were reported as passing locally. Repository CI and a live end-to-end backfill are separate verification gates.
+
+### Design decisions
+- Do not modify the already-applied Flyway V1 migration.
+- PostgreSQL primary key protects uniqueness even under concurrent requests.
+
+## Manual ingestion and historical backfill
+### Goal
+Expose safe manual POST endpoints for a date and a historical range.
+
+### Implemented
+- `POST /api/v1/ingestion?date=YYYY-MM-DD&quote=USD`.
+- `POST /api/v1/ingestion/backfill?from=...&to=...&quote=USD`.
+- Calendar-month windows; maximum 366 inclusive days per request.
+- Each successful month is committed separately and can be skipped upon rerun.
+- Per-window and total counts in the HTTP response and logs.
+- Query validation and 400/409 JSON errors.
+
+### Verification
+- Tests for the pushed implementation were reported as passing locally. Repository CI and a live end-to-end backfill are separate verification gates.
+
+## Upstream error handling and bounded retries
+### Goal
+Handle failed Frankfurter calls without silent data loss or endless retries.
+
+### Implemented
+- Up to 3 attempts for HTTP 429, HTTP 5xx and connection failures.
+- No retry for other 4xx, invalid JSON or absent response body.
+- HTTP 502 for permanent upstream errors, 503 after transient upstream failures.
+- Resilience and MVC error-mapping tests.
+
+### Verification
+- Tests for the pushed implementation were reported as passing locally. Repository CI and a live end-to-end backfill are separate verification gates.
+
+## PostgreSQL integration and recovery tests
+### Goal
+Test the actual Flyway schema and conflict behavior using disposable PostgreSQL.
+
+### Implemented
+- `FxRateIngestionPostgresTest` with Testcontainers PostgreSQL 16.
+- Tests for duplicate-safe reruns, precision, conflict rollback, invalid rows.
+- Interrupted multi-window backfill test and successful resume.
+
+### Verification
+- Tests passed locally. Repository CI and a live end-to-end backfill are separate verification gates.
 
 ### Next
-Add POST ingestion and bounded backfill endpoints, with validation and observable counts.
+Add read-only rate queries, statistics, OpenAPI, containerization, CI and a demo.

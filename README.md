@@ -1,681 +1,163 @@
 # FX Pulse - Foreign Exchange Data Platform
 
-> **Status:** Active Development - (Frankfurter Java Client)  
-> **Latest completed milestone:** v0.1 - Design & Python Prototype  
-> **Focus:** Java Backend Development + Data Engineering  
-> **Primary language:** Java 21  
-> **Data source:** European Central Bank (ECB) reference rates via Frankfurter API v2
+> **Status:** Java ingestion and PostgreSQL backend implemented; read-only API, deployment, and automation are in development.  
+> **Stack:** Java 21, Spring Boot 4.1.1, PostgreSQL 16, Flyway, Docker Compose, Maven, JUnit, Python/pandas  
+> **Source:** [Frankfurter API v2](https://frankfurter.dev/), ECB provider-specific reference rates
 
-FX Pulse is an end-to-end financial data platform designed to collect, validate, store, and analyze historical and daily foreign-exchange reference rates.
+FX Pulse is a backend and data engineering portfolio project that retrieves ECB foreign-exchange reference rates, validates and stores observations, supports repeatable historical imports, and provides a foundation for analytics and a public REST API. The source publishes reference rates, **not live tradable quotes**.
 
-The goal is to build a reliable application combining **Java backend services**, **PostgreSQL persistence**, **automated data pipelines**, **analytical transformations**, and **data quality checks**.
+## What works
 
-The project is being developed incrementally, with an emphasis on clean architecture, reliable data processing, reproducibility, automated testing, and engineering best practices.
+- **Source exploration:** Python/pandas prototype retrieving historical EUR/USD observations, calculating observation-to-observation returns and a five-observation moving average, and exporting CSV.
+- **Java backend foundation:** Spring Boot application, Maven Wrapper, `/api/v1/ping`, Actuator health endpoint, externalized configuration.
+- **Persistence:** PostgreSQL 16 in Docker Compose, Flyway-managed `raw.fx_rates` schema, JPA entity and composite key, repository tests.
+- **Client:** Spring `RestClient` reading the ECB-specific Frankfurter v2 flat JSON array into records, with input checks and bounded retry handling for transient HTTP failures.
+- **Ingestion:** validation of input records, `BigDecimal` precision, conflict-safe inserts, duplicate detection and transactional write batches.
+- **Manual endpoints:** single-date ingestion and a date-range backfill split into calendar-month windows (366 inclusive days maximum per request).
+- **Testing:** mock HTTP tests, controller/service tests, repository tests, and PostgreSQL integration tests. Tests for changes already pushed were reported as passing locally; this does not imply that hosted CI is configured or that a live backfill has been independently verified.
 
----
+## Planned next
 
-## Current Status - Frankfurter Java Client
+- Read-only, filtered and paginated exchange-rate REST endpoint; basic statistics; OpenAPI.
+- Application Docker image and GitHub Actions automated build/tests.
+- SQL/Python analytical transformations, Apache Airflow orchestration, data-quality reconciliation, and dashboard.
+- Optional Snowflake comparison, dbt, Kafka, Spark, Databricks, and Kubernetes extensions.
 
-FX Pulse is under active development.
+## Architecture
 
-The initial **v0.1 milestone** established the system architecture, financial data contract, and a working Python analytics prototype. added the Spring Boot and PostgreSQL foundation.
+```text
+Frankfurter API v2 (ECB)
+         |
+         v
+Spring Boot RestClient --> validation --> transactional ingestion
+                                              |
+                                              v
+                                       PostgreSQL raw.fx_rates
+                                              |
+                              +---------------+---------------+
+                              |                               |
+                        Read-only API                  SQL/Python analytics
+                              |                               |
+                          Consumers                         Dashboard
+```
 
-**Current focus:** implementing reliable exchange-rate ingestion. The Java Frankfurter API v2 client has been implemented and its **successful-response test has passed** using a mocked HTTP server. Validation, HTTP failure handling, persistent ingestion, and idempotent backfills require further verification or implementation.
+Reference observations are stored using their **source publication dates**. No rows are invented for weekends or holidays. Ingesting the same date/pair again must not create duplicate records; a changed value for an existing key is treated as a conflict, not silently overwritten.
 
-**Scope of the current client test:** a fixed JSON array can be deserialized into Java records and the expected request is sent. This does not yet demonstrate a live API call, database ingestion, or an end-to-end backfill.
+More detail: [architecture](docs/architecture.md), [data contract](docs/data-contract.md), [source ADR](docs/adr/0001-source.md).
 
-### Implemented
+## HTTP ingestion endpoints
 
-**Data Exploration & Python Analytics**
+With the application running locally on port 8081:
 
-- Frankfurter API v2 exploration using the ECB provider
-- Historical EUR/USD reference-rate retrieval using HTTP
-- Basic JSON response validation
-- Python/pandas analytics prototype
-- Percentage-change calculations between consecutive observations
-- Five-observation moving averages
-- CSV export of analytical results
-- Initial API exploration documentation
+```powershell
+curl.exe -i -X POST "http://localhost:8081/api/v1/ingestion?date=2025-01-02&quote=USD"
+curl.exe -i -X POST "http://localhost:8081/api/v1/ingestion/backfill?from=2025-01-01&to=2025-01-31&quote=USD"
+```
 
-**Java Backend**
+Backfill requests are limited to 366 calendar days and processed in month-sized windows. Completed windows remain committed if a later window fails; rerunning safely skips identical records. Responses report received, inserted, duplicate-skipped and outside-range-ignored counts. Expected error responses include 400 (invalid parameters), 409 (rate conflict), 502 (permanent upstream failure) and 503 (temporary upstream failure). Automatic scheduling is not yet implemented.
 
-- Java 21 Spring Boot 4.1.1 application structure
-- Maven-based project with Maven Wrapper
-- Spring Web, Spring Data JPA, Hibernate, and Flyway dependencies
-- `FxRate` JPA entity
-- `FxRateId` embedded composite primary key
-- `FxRateRepository` interface with a date-range query
-- `FxRateDto` record
-- `FxRateMapper` for entity-to-DTO conversion
-- JPA repository integration test implementation
-- Lombok support for reducing Java boilerplate
-- `FrankfurterClient` implemented with Spring `RestClient`, configurable ECB endpoint, and date/currency input checks
-- `FrankfurterRateResponse` record for the Frankfurter v2 flat JSON array
-- `FrankfurterClientTest` using `MockRestServiceServer`; successful-response test verified locally
+## Data model
 
-**Database & Infrastructure**
+`raw.fx_rates` has columns:
 
-- PostgreSQL 16 running through Docker Compose
-- Persistent PostgreSQL Docker volume
-- Environment-based database configuration
-- Flyway V1 database migration
-- `raw.fx_rates` table
-- Composite primary key and database constraints
-- Automatic schema migration execution
-- Flyway migration history tracking
-- Separate PostgreSQL database for integration testing
-
-**Documentation & Design**
-
-- Financial data contract
-- System architecture documentation
-- API exploration notes
-- Architecture decision record (ADR)
-- Development log
-- GitHub Issues for development planning
-
-### In Progress
-
-- Completing and verifying Frankfurter client negative-path tests (invalid input, HTTP errors, empty body and malformed JSON)
-- Verifying HTTP client timeout configuration and network error behavior
-- Confirming the full PostgreSQL integration test suite passes from a clean environment
-- Verifying local configuration, ping endpoint, and Actuator health on the current checkout
-- Keeping setup documentation synchronized with the implemented backend
-
-### Not Yet Implemented
-
-- Automated historical and daily exchange-rate ingestion
-- Bounded HTTP retries and end-to-end failure recovery
-- Idempotent ingestion and duplicate/conflict handling
-- REST endpoints for retrieving stored exchange rates
-- Apache Airflow orchestration
-- Production data quality checks and reconciliation
-- Interactive analytics dashboard
-- Automated CI/CD and deployment
-
----
-
-## System Architecture
-
-FX Pulse is designed to separate data ingestion, persistent storage, API access, and analytical processing.
-
-The planned end-to-end data flow is:
-
-    Frankfurter API (ECB)
-            |
-            v
-    Java Spring Boot Ingestion Service
-            |
-            v
-    Data Validation & Normalization
-            |
-            v
-    PostgreSQL - raw.fx_rates
-            |
-            +-----------------------+
-            |                       |
-            v                       v
-    Spring Boot REST API      SQL / Python Analytics
-            |                       |
-            v                       v
-    API Consumers             Reports & Dashboard
-
-Apache Airflow will eventually orchestrate recurring ingestion and analytical workflows.
-
-### Design Principles
-
-- Separation of ingestion, persistence, and analytics
-- Reproducible database schema management
-- Preservation of source observation dates
-- Explicit handling of missing publication days
-- Consistent decimal precision for financial values
-- Idempotent and recoverable data ingestion
-- Externalized configuration
-- Automated testing and data quality checks
-
-The complete architecture is documented in [docs/architecture.md](docs/architecture.md).
-
----
-
-## Features and Roadmap
-
-### Phase 1 - Java Backend & Database (In Progress)
-
-- [x] Java 21 Spring Boot project setup
-- [x] Docker-based PostgreSQL development environment
-- [x] Flyway V1 database migration
-- [x] JPA entity and composite primary key implementation
-- [x] Spring Data JPA repository implementation
-- [x] DTO and entity mapper implementation
-- [x] Initial repository integration test implementation
-- [ ] Reverify all repository integration tests on a clean local setup
-- [ ] Reverify backend configuration and health endpoints
-- [x] Implement basic Frankfurter API Java client and a passing mocked successful-response test
-- [ ] Verify client error handling, negative tests, and HTTP timeouts
-- [ ] Implement historical and daily exchange-rate ingestion
-- [ ] Add idempotent writes and conflict handling
-- [ ] Implement REST endpoints for exchange-rate retrieval
-- [ ] Add comprehensive unit and integration testing
-
-### Phase 2 - Core Data Engineering (Planned)
-
-- [x] Initial Python/pandas analytics prototype
-- [ ] SQL-based financial transformations
-- [ ] Production-ready Python analytical processing
-- [ ] Apache Airflow pipeline orchestration
-- [ ] Automated scheduling and historical backfills
-- [ ] Data quality validation and reconciliation
-- [ ] Ingestion monitoring and failure recovery
-- [ ] Interactive financial analytics dashboard
-- [ ] Optional Snowflake integration
-
-### Phase 3 - Advanced Data Engineering (Optional)
-
-- [ ] dbt analytical models and data tests
-- [ ] Kafka event-driven ingestion
-- [ ] Apache Spark historical processing
-- [ ] Databricks and Delta Lake experiments
-
-### Phase 4 - Deployment & Portfolio (Planned)
-
-- [ ] GitHub Actions CI/CD
-- [ ] Automated build and testing pipeline
-- [ ] Application containerization
-- [ ] Deployment experiments
-- [ ] Optional Kubernetes deployment
-- [ ] End-to-end demonstrations and project documentation
-
----
-
-## Data Source
-
-FX Pulse uses [Frankfurter API v2](https://frankfurter.dev/) with the **European Central Bank (ECB)** provider for historical and daily foreign-exchange reference rates.
-
-Provider-specific endpoint:
-
-    https://api.frankfurter.dev/v2/providers/ecb/rates
-
-These values are **reference exchange rates, not live trading prices**.
-
-### Data Handling Principles
-
-- Preserve the original source observation date.
-- Do not fabricate rates for weekends or holidays.
-- Validate incoming currency codes and rate values.
-- Use decimal types appropriate for financial data.
-- Preserve information about the data provider.
-- Track when an observation was ingested.
-- Detect duplicate observations and conflicting source values.
-
-The Frankfurter API has been explored in Python. A basic Java `FrankfurterClient` is also implemented and has a passing mocked successful-response test. Automated Java ingestion and persistence are **not yet implemented**.
-
----
-
-## PostgreSQL Data Model
-
-FX Pulse stores raw foreign-exchange observations in the following PostgreSQL table:
-
-`raw.fx_rates`
-
-### Table Structure
-
-| Column | PostgreSQL Type | Description |
+| Column | PostgreSQL type | Meaning |
 |---|---|---|
-| `provider` | `VARCHAR(16)` | Source provider, such as ECB |
-| `rate_date` | `DATE` | Observation date published by the provider |
-| `base_currency` | `CHAR(3)` | Base currency code |
-| `quote_currency` | `CHAR(3)` | Quote currency code |
-| `rate` | `NUMERIC(20,10)` | Foreign-exchange reference rate |
-| `ingested_at` | `TIMESTAMPTZ` | Timestamp generated when the row is inserted |
+| `provider` | `VARCHAR(16)` | Publisher, currently ECB |
+| `rate_date` | `DATE` | Date published by source |
+| `base_currency` | `CHAR(3)` | Base currency |
+| `quote_currency` | `CHAR(3)` | Quote currency |
+| `rate` | `NUMERIC(20,10)` | Positive reference rate |
+| `ingested_at` | `TIMESTAMPTZ` | Database-generated insert time |
 
-### Composite Primary Key
+Primary key: `(provider, rate_date, base_currency, quote_currency)`.
 
-The table uses the following columns as its primary key:
+Flyway migration: `ingestion-service/src/main/resources/db/migration/V1__create_fx_rates.sql`. Do not modify this migration after applying it; use new migrations for future schema changes.
 
-    (provider, rate_date, base_currency, quote_currency)
+## Getting started (Windows PowerShell)
 
-This ensures that the same provider, date, and currency pair cannot appear more than once.
-
-The schema also includes constraints to reject nonpositive exchange rates and prevent the base and quote currencies from being identical.
-
-### Database Migrations
-
-Database schema changes are managed using Flyway.
-
-The first migration is:
-
-    ingestion-service/src/main/resources/db/migration/V1__create_fx_rates.sql
-
-Flyway records applied migrations in its schema history table.
-
-This allows developers to reproduce the database structure without manually executing SQL scripts.
-
-The Java entity mappings use Hibernate/JPA, while **Flyway remains responsible for creating and modifying the database schema**.
-
----
-
-## Technology Stack
-
-| Area | Technologies | Status |
-|---|---|---|
-| Java backend | Java 21, Spring Boot 4.1.1 | Implemented foundation |
-| External HTTP client | Spring `RestClient`, Frankfurter v2 ECB endpoint | Basic client implemented; successful-response mock test passed |
-| Persistence | Spring Data JPA, Hibernate | Implemented; validation in progress |
-| Database | PostgreSQL 16 | Implemented |
-| Schema migrations | Flyway | Implemented |
-| Local infrastructure | Docker Desktop, Docker Compose | Implemented |
-| Java build tooling | Maven, Maven Wrapper | Implemented |
-| DTO mapping | Java records, manual mapping | Implemented |
-| Java testing | JUnit 5, Spring Boot Test, MockRestServiceServer | Client happy-path test passed; full suite verification in progress |
-| Python analytics | Python 3.13, pandas, requests | Implemented prototype |
-| Pipeline orchestration | Apache Airflow | Planned |
-| Data transformation | Python, SQL | Prototype / planned |
-| CI/CD | GitHub Actions | Planned |
-| Integration test infrastructure | Testcontainers | Planned |
-| Optional warehouse | Snowflake | Optional |
-| Advanced extensions | dbt, Kafka, Spark, Databricks, Kubernetes | Optional |
-
-### Tested Development Environment
-
-The Python prototype was tested locally with:
-
-- Python 3.13.5
-- pandas 3.1.0
-- requests 2.34.2
-
-The Java backend is being developed using:
-
-- Eclipse Temurin Java 21
-- Spring Boot 4.1.1
-- Maven Wrapper
-- PostgreSQL 16
-- Docker Desktop
-- IntelliJ IDEA
-- Windows PowerShell
-
----
-
-## Getting Started
-
-The repository currently contains two development components:
-
-1. A Python analytics prototype that retrieves and processes historical exchange rates.
-2. A Java Spring Boot backend with PostgreSQL persistence, currently under development.
-
-### Prerequisites
-
-- Git
-- Java 21
-- Docker Desktop with Docker Compose
-- Python 3.13 for the analytics prototype
-- Internet access for dependency installation and API requests
-
-The Java backend includes Maven Wrapper, so a separate Maven installation is not required.
-
-### 1. Clone the Repository
-
-On Windows PowerShell:
+Requirements: Java 21, Docker Desktop with Compose, Git, and Python for the analytics prototype. The Java application includes Maven Wrapper.
 
 ```powershell
 git clone https://github.com/rominiki/fx-pulse.git
 cd fx-pulse
-```
-
-If the repository is private, GitHub authentication and access permissions are required.
-
----
-
-## Running the Python Analytics Prototype
-
-### 1. Create a Python Virtual Environment
-
-From the repository root:
-
-```powershell
-python -m venv .venv
-```
-
-### 2. Install Dependencies
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r analytics/requirements.txt
-```
-
-### 3. Run the Prototype
-
-```powershell
-.\.venv\Scripts\python.exe analytics/01_api_exploration.py
-```
-
-### 4. Review the Results
-
-The script:
-
-1. Requests historical ECB EUR/USD reference rates.
-2. Validates the response, filters observations to the requested date range, and sorts them chronologically.
-3. Calculates percentage changes between consecutive observations.
-4. Calculates five-observation moving averages.
-5. Exports analytical results to `analytics/eur_usd_jan_2025.csv`.
-
-The first percentage return is missing because there is no preceding observation in the DataFrame.
-
-The first four moving averages are missing because five observations are required.
-
-**Date-range handling:** The Frankfurter API may return
-observations outside the requested date range. The Python
-prototype explicitly filters the retrieved data to the
-requested period before calculating percentage returns
-and moving averages. This ensures that the generated CSV
-contains only observations within the specified dates.
-
-For the January 2025 EUR/USD prototype, the exported
-CSV contains 22 observations from January 2 through
-January 31, 2025.
-
-Run the script a second time to confirm that it regenerates the CSV successfully rather than appending duplicate rows.
-
----
-
-## Running PostgreSQL and the Java Backend
-
-### 1. Create Your Local Environment Configuration
-
-From the repository root, copy the example configuration:
-
-```powershell
 Copy-Item .env.example .env
 ```
 
-Open `.env` and configure the local database credentials.
+Configure `DB_USER`, `DB_PASSWORD`, `DB_URL`, `FX_API_URL`, and `SERVER_PORT` in local `.env`. Never commit `.env` or secrets. Typical main DB URL: `jdbc:postgresql://localhost:5432/fxpulse`. Existing PostgreSQL volumes retain the original password when `.env` changes.
 
-Expected environment variables:
-
-| Variable | Purpose |
-|---|---|
-| `DB_USER` | PostgreSQL username |
-| `DB_PASSWORD` | PostgreSQL password |
-| `DB_URL` | JDBC URL for the main database |
-| `FX_API_URL` | Frankfurter API endpoint |
-| `SERVER_PORT` | Local Spring Boot server port |
-
-The default local database URL is:
-
-    jdbc:postgresql://localhost:5432/fxpulse
-
-**Never commit `.env` or real credentials to GitHub.**
-
-If you already have an initialized PostgreSQL Docker volume, use the original database password. Changing `.env` does not automatically change the existing PostgreSQL user's password.
-
-### 2. Start PostgreSQL
-
-Make sure Docker Desktop is running.
-
-From the repository root:
+Start PostgreSQL from the repository root:
 
 ```powershell
 docker compose up -d db
 docker compose ps
 ```
 
-Wait until the database reports a healthy status.
-
-Verify the connection:
-
-```powershell
-docker compose exec db psql -U fxpulse_user -d fxpulse -c "SELECT version();"
-```
-
-### 3. Load Environment Variables
-
-Enter the Spring Boot project:
+Load variables and start the Java app from `ingestion-service`:
 
 ```powershell
 cd ingestion-service
-```
-
-For Windows PowerShell, load the variables from the parent `.env` file:
-
-```powershell
-Get-Content ..\.env |
-    Where-Object {
-        $_ -match '^(DB_URL|DB_USER|DB_PASSWORD|FX_API_URL|SERVER_PORT)='
-    } |
-    ForEach-Object {
-        $name, $value = $_ -split '=', 2
-
-        [Environment]::SetEnvironmentVariable(
-            $name,
-            $value,
-            "Process"
-        )
-    }
-```
-
-This assumes simple, unquoted `KEY=value` entries.
-
-These variables are loaded into the current PowerShell session. New terminals must load them again.
-
-Docker Compose and Spring Boot do not automatically share all environment variables, so the Java application requires this separate configuration step.
-
-### 4. Start Spring Boot
-
-From `ingestion-service`:
-
-```powershell
+Get-Content ..\.env | Where-Object { $_ -match '^(DB_URL|DB_USER|DB_PASSWORD|FX_API_URL|SERVER_PORT)=' } | ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+}
 .\mvnw.cmd spring-boot:run
 ```
 
-The default development server port is 8081.
-
-Spring Boot should connect to PostgreSQL, validate the Flyway migration history, initialize JPA, and start the web server.
-
-### 5. Verify the Application
-
-Ping endpoint:
+Verify:
 
 ```powershell
 curl.exe -i http://localhost:8081/api/v1/ping
-```
-
-Expected JSON:
-
-```json
-{"status":"ok"}
-```
-
-Spring Boot Actuator health endpoint:
-
-```powershell
 curl.exe -i http://localhost:8081/actuator/health
 ```
 
-Expected JSON when healthy:
+## Tests
 
-```json
-{"status":"UP"}
-```
-
-
----
-
-## Testing
-
-FX Pulse uses JUnit 5 and Spring Boot Test for Java backend testing.
-
-The repository integration tests are designed to verify PostgreSQL persistence and data mapping. A separate HTTP-client test verifies the Frankfurter API response contract without accessing the network.
-
-### Frankfurter HTTP Client Test
-
-The `FrankfurterClientTest` uses `MockRestServiceServer` to simulate Frankfurter's v2 HTTP response. The locally verified happy-path test checks the request and deserialization of two records into `FrankfurterRateResponse` objects.
-
-From `ingestion-service`, run:
+Run from `ingestion-service`. Docker Desktop and the configured PostgreSQL test database are needed for database-backed tests; HTTP mock tests do not call Frankfurter over the network.
 
 ```powershell
-.\mvnw.cmd "-Dtest=FrankfurterClientTest" test
+.\mvnw.cmd "-Dtest=FrankfurterClientTest,FrankfurterClientResilienceTest" test
+.\mvnw.cmd "-Dtest=BackfillServiceTest,IngestionControllerTest,IngestionErrorHandlerTest" test
+.\mvnw.cmd "-Dtest=FxRateIngestionPostgresTest" test
+.\mvnw.cmd verify
 ```
 
-**Verification status:** The successful-response test passed locally. Additional error-handling and timeout cases must be marked verified only after they run successfully.
-
-### Repository Integration Test
-
-The `FxRateRepositoryTest` covers:
-
-- Saving an exchange-rate observation
-- Retrieving an observation by its composite primary key
-- Preserving observation dates and currency codes
-- Preserving decimal precision with `BigDecimal`
-- Reading the database-generated ingestion timestamp
-- Querying observations by date range
-- Converting an entity into an API DTO
-
-### Test Database
-
-Repository integration tests use a separate PostgreSQL database:
-
-    fxpulse_migration_test
-
-Create it once if it does not already exist:
+The existing `FxRateRepositoryTest` uses a separate `fxpulse_migration_test` database. Create it once if needed from the repository root:
 
 ```powershell
 docker compose exec db psql -U fxpulse_user -d postgres -c "CREATE DATABASE fxpulse_migration_test;"
 ```
 
-Run this from the repository root.
+`fxpulse_user` is an example username; use the value configured in your own `.env`. More local setup details: [docs/setup.md](docs/setup.md).
 
-Flyway manages the schema in the test database independently of the main development database.
-
-### Run the Tests
-
-From `ingestion-service`, with PostgreSQL running and environment variables loaded:
-
-Run the repository integration test:
+For the Python proof of concept, from repository root:
 
 ```powershell
-.\mvnw.cmd "-Dtest=FxRateRepositoryTest" test
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r analytics/requirements.txt
+.\.venv\Scripts\python.exe analytics/01_api_exploration.py
 ```
 
-Run the complete test suite:
-
-```powershell
-.\mvnw.cmd clean test
-```
-
-**Current verification status:** Java compilation and Flyway migration execution have previously succeeded, and the Frankfurter client's mocked successful-response test passed locally. The complete JPA integration-test suite remains unverified in this README; earlier runs encountered Hibernate column-type validation and database environment-variable issues.
-
----
-
-## Stopping Local Services
-
-Stop Spring Boot using `Ctrl+C` in its running terminal.
-
-From the repository root, stop PostgreSQL:
+To stop services safely:
 
 ```powershell
 docker compose stop db
-```
-
-To remove the Docker Compose containers and network while retaining the database volume:
-
-```powershell
+# Or stop containers and network while retaining DB data:
 docker compose down
 ```
 
-**Warning:** Avoid `docker compose down -v` unless you intentionally want to delete the Compose-managed volumes and their local database data.
+Do not use `docker compose down -v` unless intentionally deleting the local database volume.
 
----
+## Documentation and milestones
 
-## Engineering Goals
+- [Development log](docs/LOG.md)
+- [Data contract](docs/data-contract.md)
+- [Architecture](docs/architecture.md)
+- [Local setup](docs/setup.md)
+- [API exploration](docs/api-exploration.md)
+- [ECB provider selection](docs/adr/0001-source.md)
 
-FX Pulse is designed to demonstrate practical backend and data engineering skills.
+The design/prototype milestone (`v0.1-design`) established the foundation. The Java MVP release will be considered ready when ingestion, read API, Docker demo, full test suite and CI are demonstrated together. A pushed commit whose local tests passed is not the same as a green automated CI run.
 
-Key engineering objectives include:
+## License
 
-- Reliable and repeatable historical exchange-rate ingestion
-- No duplicate observations after pipeline reruns
-- Explicit handling of missing publication days
-- Correct decimal precision for financial values
-- Version-controlled database schema evolution
-- Tested data persistence and analytical calculations
-- Recovery from pipeline failures
-- Automated pipeline orchestration
-- Reproducible local development
-- Clear API and architecture documentation
-- Maintainable, testable application components
-
----
-
-## Documentation
-
-Project documentation is maintained in the `docs/` directory.
-
-- [API Exploration](docs/api-exploration.md)
-- [Financial Data Contract](docs/data-contract.md)
-- [System Architecture](docs/architecture.md)
-- [Architecture Decision: ECB Data Source](docs/adr/0001-source.md)
-- [Development Log](docs/LOG.md)
-- [Local Development Setup](docs/setup.md)
-
----
-
-## Development Milestones
-
-### v0.1 - Design & Python Prototype
-
-Initial project milestone.
-
-Includes:
-
-- API exploration
-- Python analytics prototype
-- Financial data contract
-- System architecture design
-- Architecture decision record
-- Initial repository structure
-
-### Java Backend Foundation
-
-Implemented foundation; clean end-to-end verification is still in progress.
-
-Includes:
-
-- Spring Boot service foundation
-- Docker-based PostgreSQL
-- Flyway database migrations
-- JPA persistence model
-- Composite primary key
-- Spring Data repository
-- DTO mapping
-- Integration tests
-- Externalized configuration
-- Health endpoint implementation (current smoke-test rerun pending)
-
-Final testing and sign-off are still in progress.
-
-### Frankfurter Client & Exchange-Rate Ingestion (In Progress)
-
-Implemented and locally tested:
-
-- Basic Java Frankfurter ECB API client using `RestClient`
-- Mapping the v2 JSON array into Java `FrankfurterRateResponse` records
-- Mocked HTTP successful-response test
-
-Remaining work:
-
-- Verify negative-path and timeout behavior
-- Validate incoming rate observations
-- Persistent exchange-rate ingestion
-- Idempotent database operations
-- Duplicate and conflict handling
-- Integration tests for the ingestion pipeline
-
----
-
-## About
-
-FX Pulse is an independent portfolio project demonstrating **Java Backend Development**, **Data Engineering**, **financial-data processing**, **database design**, and **software testing**.
-
-The project is intended to evolve from a working analytical prototype into a reproducible, tested, and automated financial data platform.
-
-Development progress is tracked through GitHub Issues and the FX Pulse Development Project Board.
-
-The platform is under active development, and features are documented according to their current implementation and verification status.
+MIT - see [LICENSE](LICENSE).
