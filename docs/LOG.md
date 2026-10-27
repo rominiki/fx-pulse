@@ -254,3 +254,38 @@ automated tests and reproducible setup documentation.
 - Validate incoming values
 - Save observations to PostgreSQL
 - Implement duplicate and conflict handling
+
+## 3-1
+
+### Goal
+
+Implement and test the Frankfurter API v2 Java client.
+
+### Completed
+
+- Created FrankfurterRateResponse record
+- Implemented FrankfurterClient using Spring RestClient
+- Configured the ECB-specific API endpoint
+- Added date and currency input validation
+- Implemented JSON array deserialization
+- Added MockRestServiceServer tests
+- Verified successful exchange-rate response parsing
+- Added controlled handling of HTTP 4xx and 5xx errors
+- Added handling for malformed and empty responses
+- Configured HTTP connection and read timeouts
+- Verified 8 client tests pass
+
+### Architecture Notes
+
+- The client only retrieves external API data.
+- Incoming DTOs are separate from JPA entities.
+- Data validation and persistence will be handled
+  by the ingestion service.
+- No database connection is required for client tests.
+
+### Next
+
+- Validate incoming exchange-rate observations
+- Map FrankfurterRateResponse to FxRate
+- Implement idempotent PostgreSQL persistence
+- Add tests for duplicate and conflicting records

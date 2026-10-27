@@ -1,6 +1,6 @@
 # FX Pulse - Foreign Exchange Data Platform
 
-> **Status:** Active Development - Java Backend Foundation  
+> **Status:** Active Development - (Frankfurter Java Client)  
 > **Latest completed milestone:** v0.1 - Design & Python Prototype  
 > **Focus:** Java Backend Development + Data Engineering  
 > **Primary language:** Java 21  
@@ -14,13 +14,15 @@ The project is being developed incrementally, with an emphasis on clean architec
 
 ---
 
-## Current Status - Java Backend Foundation
+## Current Status - Frankfurter Java Client
 
 FX Pulse is under active development.
 
-The initial **v0.1 milestone** established the system architecture, financial data contract, and a working Python analytics prototype.
+The initial **v0.1 milestone** established the system architecture, financial data contract, and a working Python analytics prototype. added the Spring Boot and PostgreSQL foundation.
 
-The current development stage focuses on building a Java Spring Boot backend connected to PostgreSQL.
+**Current focus:** implementing reliable exchange-rate ingestion. The Java Frankfurter API v2 client has been implemented and its **successful-response test has passed** using a mocked HTTP server. Validation, HTTP failure handling, persistent ingestion, and idempotent backfills require further verification or implementation.
+
+**Scope of the current client test:** a fixed JSON array can be deserialized into Java records and the expected request is sent. This does not yet demonstrate a live API call, database ingestion, or an end-to-end backfill.
 
 ### Implemented
 
@@ -47,6 +49,9 @@ The current development stage focuses on building a Java Spring Boot backend con
 - `FxRateMapper` for entity-to-DTO conversion
 - JPA repository integration test implementation
 - Lombok support for reducing Java boilerplate
+- `FrankfurterClient` implemented with Spring `RestClient`, configurable ECB endpoint, and date/currency input checks
+- `FrankfurterRateResponse` record for the Frankfurter v2 flat JSON array
+- `FrankfurterClientTest` using `MockRestServiceServer`; successful-response test verified locally
 
 **Database & Infrastructure**
 
@@ -71,18 +76,16 @@ The current development stage focuses on building a Java Spring Boot backend con
 
 ### In Progress
 
-- Finalizing Hibernate/JPA schema mapping validation
-- Getting the full PostgreSQL integration test suite passing
-- Finalizing externalized Spring Boot configuration
-- Verifying REST ping and Actuator health endpoints
-- Completing reproducible local setup documentation
-- Finalizing the backend milestone
+- Completing and verifying Frankfurter client negative-path tests (invalid input, HTTP errors, empty body and malformed JSON)
+- Verifying HTTP client timeout configuration and network error behavior
+- Confirming the full PostgreSQL integration test suite passes from a clean environment
+- Verifying local configuration, ping endpoint, and Actuator health on the current checkout
+- Keeping setup documentation synchronized with the implemented backend
 
 ### Not Yet Implemented
 
-- Java HTTP client for the Frankfurter API
 - Automated historical and daily exchange-rate ingestion
-- Retry handling and error recovery
+- Bounded HTTP retries and end-to-end failure recovery
 - Idempotent ingestion and duplicate/conflict handling
 - REST endpoints for retrieving stored exchange rates
 - Apache Airflow orchestration
@@ -145,9 +148,10 @@ The complete architecture is documented in [docs/architecture.md](docs/architect
 - [x] Spring Data JPA repository implementation
 - [x] DTO and entity mapper implementation
 - [x] Initial repository integration test implementation
-- [x] Verify all repository integration tests pass
-- [x] Finalize backend configuration and health checks
-- [ ] Implement Frankfurter API Java client
+- [ ] Reverify all repository integration tests on a clean local setup
+- [ ] Reverify backend configuration and health endpoints
+- [x] Implement basic Frankfurter API Java client and a passing mocked successful-response test
+- [ ] Verify client error handling, negative tests, and HTTP timeouts
 - [ ] Implement historical and daily exchange-rate ingestion
 - [ ] Add idempotent writes and conflict handling
 - [ ] Implement REST endpoints for exchange-rate retrieval
@@ -203,7 +207,7 @@ These values are **reference exchange rates, not live trading prices**.
 - Track when an observation was ingested.
 - Detect duplicate observations and conflicting source values.
 
-The Frankfurter API exploration is currently implemented in Python. The Java API client and automated ingestion will be added in a later development stage.
+The Frankfurter API has been explored in Python. A basic Java `FrankfurterClient` is also implemented and has a passing mocked successful-response test. Automated Java ingestion and persistence are **not yet implemented**.
 
 ---
 
@@ -255,13 +259,14 @@ The Java entity mappings use Hibernate/JPA, while **Flyway remains responsible f
 | Area | Technologies | Status |
 |---|---|---|
 | Java backend | Java 21, Spring Boot 4.1.1 | Implemented foundation |
+| External HTTP client | Spring `RestClient`, Frankfurter v2 ECB endpoint | Basic client implemented; successful-response mock test passed |
 | Persistence | Spring Data JPA, Hibernate | Implemented; validation in progress |
 | Database | PostgreSQL 16 | Implemented |
 | Schema migrations | Flyway | Implemented |
 | Local infrastructure | Docker Desktop, Docker Compose | Implemented |
 | Java build tooling | Maven, Maven Wrapper | Implemented |
 | DTO mapping | Java records, manual mapping | Implemented |
-| Java testing | JUnit 5, Spring Boot Test | Tests implemented; verification in progress |
+| Java testing | JUnit 5, Spring Boot Test, MockRestServiceServer | Client happy-path test passed; full suite verification in progress |
 | Python analytics | Python 3.13, pandas, requests | Implemented prototype |
 | Pipeline orchestration | Apache Airflow | Planned |
 | Data transformation | Python, SQL | Prototype / planned |
@@ -497,7 +502,19 @@ Expected JSON when healthy:
 
 FX Pulse uses JUnit 5 and Spring Boot Test for Java backend testing.
 
-The repository integration test verifies that an exchange-rate entity can be stored in PostgreSQL and read back correctly.
+The repository integration tests are designed to verify PostgreSQL persistence and data mapping. A separate HTTP-client test verifies the Frankfurter API response contract without accessing the network.
+
+### Frankfurter HTTP Client Test
+
+The `FrankfurterClientTest` uses `MockRestServiceServer` to simulate Frankfurter's v2 HTTP response. The locally verified happy-path test checks the request and deserialization of two records into `FrankfurterRateResponse` objects.
+
+From `ingestion-service`, run:
+
+```powershell
+.\mvnw.cmd "-Dtest=FrankfurterClientTest" test
+```
+
+**Verification status:** The successful-response test passed locally. Additional error-handling and timeout cases must be marked verified only after they run successfully.
 
 ### Repository Integration Test
 
@@ -543,7 +560,7 @@ Run the complete test suite:
 .\mvnw.cmd clean test
 ```
 
-**Current verification status:** Java compilation and Flyway migration execution have succeeded. The complete JPA integration-test suite remains under verification; earlier runs encountered Hibernate column-type validation and database environment-variable configuration issues.
+**Current verification status:** Java compilation and Flyway migration execution have previously succeeded, and the Frankfurter client's mocked successful-response test passed locally. The complete JPA integration-test suite remains unverified in this README; earlier runs encountered Hibernate column-type validation and database environment-variable issues.
 
 ---
 
@@ -617,7 +634,7 @@ Includes:
 
 ### Java Backend Foundation
 
-Current development stage.
+Implemented foundation; clean end-to-end verification is still in progress.
 
 Includes:
 
@@ -630,17 +647,22 @@ Includes:
 - DTO mapping
 - Integration tests
 - Externalized configuration
-- Health endpoint verification
+- Health endpoint implementation (current smoke-test rerun pending)
 
 Final testing and sign-off are still in progress.
 
-### Next Milestone - Exchange-Rate Ingestion
+### Frankfurter Client & Exchange-Rate Ingestion (In Progress)
 
-Planned work:
+Implemented and locally tested:
 
-- Java Frankfurter API client
-- Historical rate retrieval
-- JSON parsing and validation
+- Basic Java Frankfurter ECB API client using `RestClient`
+- Mapping the v2 JSON array into Java `FrankfurterRateResponse` records
+- Mocked HTTP successful-response test
+
+Remaining work:
+
+- Verify negative-path and timeout behavior
+- Validate incoming rate observations
 - Persistent exchange-rate ingestion
 - Idempotent database operations
 - Duplicate and conflict handling
