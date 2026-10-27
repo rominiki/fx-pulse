@@ -1,5 +1,6 @@
 package dev.rominiki.fxpulse.web;
 
+import dev.rominiki.fxpulse.client.FrankfurterClientException;
 import dev.rominiki.fxpulse.service.FxRateConflictException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,5 +27,15 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiError> conflict(FxRateConflictException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("RATE_CONFLICT", exception.getMessage()));
+    }
+
+    @ExceptionHandler(FrankfurterClientException.class)
+    public ResponseEntity<ApiError> upstream(FrankfurterClientException exception) {
+        if (exception.isTransientFailure()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(new ApiError("UPSTREAM_UNAVAILABLE", exception.getMessage()));
+        }
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new ApiError("UPSTREAM_FAILURE", exception.getMessage()));
     }
 }
