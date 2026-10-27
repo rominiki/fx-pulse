@@ -1,81 +1,40 @@
-# FX Pulse - Foreign Exchange Data Platform
+# FX Pulse
 
-> **Status:** Java ingestion and PostgreSQL backend implemented; read-only API, deployment, and automation are in development.  
-> **Stack:** Java 21, Spring Boot 4.1.1, PostgreSQL 16, Flyway, Docker Compose, Maven, JUnit, Python/pandas  
-> **Source:** [Frankfurter API v2](https://frankfurter.dev/), ECB provider-specific reference rates
+**Java 21 · Spring Boot 4.1.1 · PostgreSQL 16 · Docker Compose · GitHub Actions**
 
-FX Pulse is a backend and data engineering portfolio project that retrieves ECB foreign-exchange reference rates, validates and stores observations, supports repeatable historical imports, and provides a foundation for analytics and a public REST API. The source publishes reference rates, **not live tradable quotes**.
+FX Pulse is a portfolio financial-data service for historical and daily **European Central Bank (ECB) reference exchange rates** fetched through [Frankfurter API v2](https://frankfurter.dev/). It validates source observations, stores them in PostgreSQL, supports repeatable historical backfills, and exposes a read-only REST API and basic statistics. **These are reference rates, not executable trading quotes or a real-time market feed.**
 
-## What works
+## Implemented Java backend
 
-- **Source exploration:** Python/pandas prototype retrieving historical EUR/USD observations, calculating observation-to-observation returns and a five-observation moving average, and exporting CSV.
-- **Java backend foundation:** Spring Boot application, Maven Wrapper, `/api/v1/ping`, Actuator health endpoint, externalized configuration.
-- **Persistence:** PostgreSQL 16 in Docker Compose, Flyway-managed `raw.fx_rates` schema, JPA entity and composite key, repository tests.
-- **Client:** Spring `RestClient` reading the ECB-specific Frankfurter v2 flat JSON array into records, with input checks and bounded retry handling for transient HTTP failures.
-- **Ingestion:** validation of input records, `BigDecimal` precision, conflict-safe inserts, duplicate detection and transactional write batches.
-- **Manual endpoints:** single-date ingestion and a date-range backfill split into calendar-month windows (366 inclusive days maximum per request).
-- **Testing:** mock HTTP tests, controller/service tests, repository tests, and PostgreSQL integration tests. Tests for changes already pushed were reported as passing locally; this does not imply that hosted CI is configured or that a live backfill has been independently verified.
+- ECB-specific Frankfurter v2 HTTP client with bounded retries for transient failures and structured upstream errors.
+- Validated EUR-to-quote exchange rates, precise `BigDecimal` values, preserved source publication dates.
+- PostgreSQL persistence using Flyway and an atomic unique-key insert. Identical reruns skip rows; conflicting source values are reported without silent overwrites.
+- Manual single-date ingestion and bounded historical backfills (up to 366 inclusive days, processed in calendar-month windows).
+- Paginated, sorted exchange-rate query endpoint and basic statistics query endpoint.
+- OpenAPI/Swagger UI, health endpoint, JUnit/MockMvc/Mockito tests, PostgreSQL integration tests, Testcontainers, Docker Compose and GitHub Actions.
+- Repeatable PowerShell end-to-end smoke test (`scripts/smoke-test.ps1`).
 
-## Planned next
-
-- Read-only, filtered and paginated exchange-rate REST endpoint; basic statistics; OpenAPI.
-- Application Docker image and GitHub Actions automated build/tests.
-- SQL/Python analytical transformations, Apache Airflow orchestration, data-quality reconciliation, and dashboard.
-- Optional Snowflake comparison, dbt, Kafka, Spark, Databricks, and Kubernetes extensions.
+**Verified by the developer:** local test suite, application startup, historical backfill and duplicate-safe rerun, rates and statistics query with stored data, Docker execution, GitHub Actions CI, and smoke test. Public branch and release availability should be checked separately.
 
 ## Architecture
 
 ```text
-Frankfurter API v2 (ECB)
+Frankfurter v2 / ECB
          |
-         v
-Spring Boot RestClient --> validation --> transactional ingestion
-                                              |
-                                              v
-                                       PostgreSQL raw.fx_rates
-                                              |
-                              +---------------+---------------+
-                              |                               |
-                        Read-only API                  SQL/Python analytics
-                              |                               |
-                          Consumers                         Dashboard
+Spring RestClient (HTTP + retry)
+         |
+Ingestion and validation services
+         |
+PostgreSQL raw.fx_rates (Flyway migration; unique compound key)
+         |
+Spring REST API: historical rates + basic statistics
 ```
 
-Reference observations are stored using their **source publication dates**. No rows are invented for weekends or holidays. Ingesting the same date/pair again must not create duplicate records; a changed value for an existing key is treated as a conflict, not silently overwritten.
+Python/pandas exploration is provided in `analytics/`. Scheduling with Airflow, production analytical transformations, Snowflake comparison and a dashboard are **future work**, not part of this Java MVP.
 
-More detail: [architecture](docs/architecture.md), [data contract](docs/data-contract.md), [source ADR](docs/adr/0001-source.md).
+## Quick start (Docker)
 
-## HTTP ingestion endpoints
-
-With the application running locally on port 8081:
-
-```powershell
-curl.exe -i -X POST "http://localhost:8081/api/v1/ingestion?date=2025-01-02&quote=USD"
-curl.exe -i -X POST "http://localhost:8081/api/v1/ingestion/backfill?from=2025-01-01&to=2025-01-31&quote=USD"
-```
-
-Backfill requests are limited to 366 calendar days and processed in month-sized windows. Completed windows remain committed if a later window fails; rerunning safely skips identical records. Responses report received, inserted, duplicate-skipped and outside-range-ignored counts. Expected error responses include 400 (invalid parameters), 409 (rate conflict), 502 (permanent upstream failure) and 503 (temporary upstream failure). Automatic scheduling is not yet implemented.
-
-## Data model
-
-`raw.fx_rates` has columns:
-
-| Column | PostgreSQL type | Meaning |
-|---|---|---|
-| `provider` | `VARCHAR(16)` | Publisher, currently ECB |
-| `rate_date` | `DATE` | Date published by source |
-| `base_currency` | `CHAR(3)` | Base currency |
-| `quote_currency` | `CHAR(3)` | Quote currency |
-| `rate` | `NUMERIC(20,10)` | Positive reference rate |
-| `ingested_at` | `TIMESTAMPTZ` | Database-generated insert time |
-
-Primary key: `(provider, rate_date, base_currency, quote_currency)`.
-
-Flyway migration: `ingestion-service/src/main/resources/db/migration/V1__create_fx_rates.sql`. Do not modify this migration after applying it; use new migrations for future schema changes.
-
-## Getting started (Windows PowerShell)
-
-Requirements: Java 21, Docker Desktop with Compose, Git, and Python for the analytics prototype. The Java application includes Maven Wrapper.
+Requirements: Docker Desktop with Docker Compose, Git.
 
 ```powershell
 git clone https://github.com/rominiki/fx-pulse.git
@@ -83,80 +42,68 @@ cd fx-pulse
 Copy-Item .env.example .env
 ```
 
-Configure `DB_USER`, `DB_PASSWORD`, `DB_URL`, `FX_API_URL`, and `SERVER_PORT` in local `.env`. Never commit `.env` or secrets. Typical main DB URL: `jdbc:postgresql://localhost:5432/fxpulse`. Existing PostgreSQL volumes retain the original password when `.env` changes.
-
-Start PostgreSQL from the repository root:
+Set `DB_USER` and `DB_PASSWORD` in the untracked `.env` file. Keep the database password already associated with an existing PostgreSQL data volume. `FX_API_URL` can remain the documented ECB endpoint. **Never commit `.env`.**
 
 ```powershell
-docker compose up -d db
+docker compose config --quiet
+docker compose up --build -d
 docker compose ps
+curl.exe http://localhost:8081/actuator/health
 ```
 
-Load variables and start the Java app from `ingestion-service`:
+The root `docker-compose.yml` must contain **both** `db` and `ingestion-service`. If your checkout only defines `db`, sync your verified local Compose changes before using this instruction. Stop any IntelliJ-run application already bound to port 8081.
+
+### Sample requests
 
 ```powershell
-cd ingestion-service
-Get-Content ..\.env | Where-Object { $_ -match '^(DB_URL|DB_USER|DB_PASSWORD|FX_API_URL|SERVER_PORT)=' } | ForEach-Object {
-    $name, $value = $_ -split '=', 2
-    [Environment]::SetEnvironmentVariable($name, $value, 'Process')
-}
-.\mvnw.cmd spring-boot:run
+curl.exe -i -X POST "http://localhost:8081/api/v1/ingestion?date=2025-01-02&quote=USD"
+curl.exe -i -X POST "http://localhost:8081/api/v1/ingestion/backfill?from=2025-01-01&to=2025-01-31&quote=USD"
+curl.exe "http://localhost:8081/api/v1/rates?from=2025-01-01&to=2025-01-31&quote=USD&page=0&size=20"
+curl.exe "http://localhost:8081/api/v1/stats/basic?from=2025-01-01&to=2025-01-31&quote=USD"
 ```
 
-Verify:
+- Swagger UI: <http://localhost:8081/swagger-ui.html>
+- OpenAPI: <http://localhost:8081/v3/api-docs>
+- Health: <http://localhost:8081/actuator/health>
+
+The rates endpoint returns `content`, `page`, `size`, `totalElements` and `totalPages`. The statistics endpoint returns observation count and date/rate summary fields; an empty interval returns zero observations and null statistics. Weekends and ECB holidays do not imply missing pipeline records.
+
+## Verification
+
+With Java 21 and the necessary test database/environment configuration, from `ingestion-service`:
 
 ```powershell
-curl.exe -i http://localhost:8081/api/v1/ping
-curl.exe -i http://localhost:8081/actuator/health
+.\mvnw.cmd clean verify
 ```
 
-## Tests
+On an Ubuntu CI runner: `./mvnw -B clean verify`. Existing repository tests may expect the separate database `fxpulse_migration_test`; the CI workflow provides PostgreSQL for those tests. Testcontainers tests use disposable databases.
 
-Run from `ingestion-service`. Docker Desktop and the configured PostgreSQL test database are needed for database-backed tests; HTTP mock tests do not call Frankfurter over the network.
+With the full application running, from the repository root:
 
 ```powershell
-.\mvnw.cmd "-Dtest=FrankfurterClientTest,FrankfurterClientResilienceTest" test
-.\mvnw.cmd "-Dtest=BackfillServiceTest,IngestionControllerTest,IngestionErrorHandlerTest" test
-.\mvnw.cmd "-Dtest=FxRateIngestionPostgresTest" test
-.\mvnw.cmd verify
+.\scripts\smoke-test.ps1
 ```
 
-The existing `FxRateRepositoryTest` uses a separate `fxpulse_migration_test` database. Create it once if needed from the repository root:
+The smoke test replays a backfill, checks that the repeat inserted zero rows, verifies nonempty rates and matching summary counts, and checks OpenAPI paths. Do not run the destructive `docker compose down -v` unless intentionally removing local data.
 
-```powershell
-docker compose exec db psql -U fxpulse_user -d postgres -c "CREATE DATABASE fxpulse_migration_test;"
-```
+## Persistence contract
 
-`fxpulse_user` is an example username; use the value configured in your own `.env`. More local setup details: [docs/setup.md](docs/setup.md).
+`raw.fx_rates` stores provider, published rate date, base currency, quote currency, exact decimal rate and ingestion timestamp. Unique key: `(provider, rate_date, base_currency, quote_currency)`. See [data contract](docs/data-contract.md).
 
-For the Python proof of concept, from repository root:
+## Project documentation
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r analytics/requirements.txt
-.\.venv\Scripts\python.exe analytics/01_api_exploration.py
-```
-
-To stop services safely:
-
-```powershell
-docker compose stop db
-# Or stop containers and network while retaining DB data:
-docker compose down
-```
-
-Do not use `docker compose down -v` unless intentionally deleting the local database volume.
-
-## Documentation and milestones
-
-- [Development log](docs/LOG.md)
-- [Data contract](docs/data-contract.md)
+- [Setup and troubleshooting](docs/setup.md)
+- [Data contract and conflict policy](docs/data-contract.md)
 - [Architecture](docs/architecture.md)
-- [Local setup](docs/setup.md)
-- [API exploration](docs/api-exploration.md)
-- [ECB provider selection](docs/adr/0001-source.md)
+- [Engineering log](docs/LOG.md)
+- [Release notes](docs/release-notes.md)
+- [ECB source decision](docs/adr/0001-source.md)
 
-The design/prototype milestone (`v0.1-design`) established the foundation. The Java MVP release will be considered ready when ingestion, read API, Docker demo, full test suite and CI are demonstrated together. A pushed commit whose local tests passed is not the same as a green automated CI run.
+## Release and limitations
+
+The intended Java MVP tag is `v0.4-java-mvp`. The tag is a release identifier, **not** the Spring Boot or database version. See [release notes](docs/release-notes.md).
+
+Known boundaries: ECB data is not live trading data; the API offers basic summary statistics rather than production financial analytics; a manual ingestion endpoint exists but no continuous scheduler is included; this is a local/CI reproducible demo, not a hardened publicly hosted production service.
 
 ## License
 
